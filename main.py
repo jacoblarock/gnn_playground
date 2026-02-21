@@ -40,12 +40,9 @@ def load_reddit() -> pd.DataFrame:
             graph_indic_path="REDDIT-BINARY_graph_indicator.txt",
             graph_label_path="REDDIT-BINARY_graph_labels.txt",
         )
-        start = datetime.now()
-        neighbor_counts_mt(df)
-        print(datetime.now() - start)
-        df = neighbor_counts(df)
+        df = neighbor_counts_mt(df)
         print(set(df["neighbors"]))
-        df = l1_neighbor_counts(df)
+        df = l1_neighbor_counts_mt(df)
         df = graph_weights(df)
         with open("data/processed/reddit.pkl", "wb") as file:
             pickle.dump(df, file)
