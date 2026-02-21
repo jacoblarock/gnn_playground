@@ -62,11 +62,9 @@ def l1_neighbor_counts_mt(df: pd.DataFrame) -> pd.DataFrame:
         with mp.Pool(10) as pool:
             counts = pool.map(partial(_count_l1, df, c), nodes)
         temp = pd.DataFrame({
-            "counts": counts
+            f"l1c{c}": counts
         }, index=nodes)
         df = df.join(temp, on="a", how="left")
-        df[f"l1c{c}"] += df["counts"]
         df = df.drop("counts", axis=1)
-        print()
         print()
     return df
