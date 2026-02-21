@@ -5,7 +5,7 @@ from loader import load_graphs
 from processor import *
 from models import *
 
-def mutag():
+def load_mutag() -> pd.DataFrame:
     makedirs("data/processed", exist_ok=True)
     if isfile("data/processed/mutag.pkl"):
         with open("data/processed/mutag.pkl", "rb") as file:
@@ -24,15 +24,9 @@ def mutag():
         df = graph_weights(df)
         with open("data/processed/mutag.pkl", "wb") as file:
             pickle.dump(df, file)
-    print(df)
-    model = create_mlp_binary(7, 8, 1.5, 0.0)
-    print(model.summary())
-    fit(model, df, 200)
-    df["prediction"] = predict(model, df)
-    print(df)
-    df.to_csv("out.csv")
+    return df
 
-def reddit():
+def load_reddit() -> pd.DataFrame:
     makedirs("data/processed", exist_ok=True)
     if isfile("data/processed/reddit.pkl"):
         with open("data/processed/reddit.pkl", "rb") as file:
@@ -49,13 +43,30 @@ def reddit():
         df = graph_weights(df)
         with open("data/processed/reddit.pkl", "wb") as file:
             pickle.dump(df, file)
+    return df
+
+def main():
+    train_split = 0.8
+    makedirs("out", exist_ok=True)
+    df = load_mutag()
     print(df)
-    model = create_mlp_binary(5, 8, 1.5, 0.0)
+    print(df["graph"].max())
+    split_point = int(df["graph"].max() * train_split)
+    train = df.loc[df["graph"] <= split_point].reset_index(drop=True)
+    test = df.loc[df["graph"] > split_point].reset_index(drop=True)
+    # model = create_mlp_binary(7, 8, 1.5, 0.0)
+    model = create_mlp_embedding(7, 7, 8, 1.5, 0.0)
     print(model.summary())
-    fit(model, df, 200)
-    df["prediction"] = predict(model, df)
-    print(df)
-    df.to_csv("out.csv")
+    model = fit(model, train, 1000)
+    g_eval = graph_eval_linear(model, test)
+    res0 = g_eval.loc[g_eval["true"] == 0,"pred"]
+    res1 = g_eval.loc[g_eval["true"] == 1,"pred"]
+    print("Results 0 labels:")
+    print("mean:", res0.mean())
+    print("stdev:", res0.std())
+    print("Results 1 labels:")
+    print("mean:", res1.mean())
+    print("stdev:", res1.std())
 
 if __name__ == "__main__":
-    reddit()
+    main()
