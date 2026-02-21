@@ -30,13 +30,13 @@ def _count_neighbors(df: pd.DataFrame, node: int) -> int:
     return df.loc[df["a"] == node].shape[0]
 
 def neighbor_counts_mt(df: pd.DataFrame) -> pd.DataFrame:
-    df["neighbors"] = 0
+    nodes = list(set(df["a"]))
     with mp.Pool(10) as pool:
-        counts = pool.map(partial(_count_neighbors, df), set(df["a"]))
-    print()
-    for node, count in enumerate(counts):
-        print("assign node:", node, end="\r")
-        df.loc[df["a"] == node,"neighbors"] = count
+        counts = pool.map(partial(_count_neighbors, df), nodes)
+    temp = pd.DataFrame({
+        "neighbors": counts
+    }, index=nodes)
+    df = df.join(temp, on="a")
     print()
     return df
 
@@ -58,12 +58,15 @@ def l1_neighbor_counts_mt(df: pd.DataFrame) -> pd.DataFrame:
     for c in range(df["neighbors"].min(), df["neighbors"].max()+1):
         print(c)
         df[f"l1c{c}"] = 0
+        nodes = list(set(df.loc[df["neighbors"] == c,"a"]))
         with mp.Pool(10) as pool:
-            counts = pool.map(partial(_count_l1, df, c), set(df.loc[df["neighbors"] == c,"a"]))
-        nodes = list(df.loc[df["neighbors"] == c,"a"])
-        for i_node, count in enumerate(counts):
-            node = nodes[i_node]
-            print("assign node:", node, end="\r")
-            df.loc[df["a"] == node,f"l1c{c}"] = count
+            counts = pool.map(partial(_count_l1, df, c), nodes)
+        temp = pd.DataFrame({
+            "counts": counts
+        }, index=nodes)
+        df = df.join(temp, on="a", how="left")
+        df[f"l1c{c}"] += df["counts"]
+        df = df.drop("counts", axis=1)
+        print()
         print()
     return df
