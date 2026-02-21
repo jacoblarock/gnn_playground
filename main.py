@@ -4,6 +4,7 @@ import pickle
 from loader import load_graphs
 from processor import *
 from models import *
+from datetime import datetime
 
 def load_mutag() -> pd.DataFrame:
     makedirs("data/processed", exist_ok=True)
@@ -19,8 +20,9 @@ def load_mutag() -> pd.DataFrame:
             edge_label_path="MUTAG_edge_labels.txt",
             vertex_label_path="MUTAG_node_labels.txt",
         )
-        df = neighbor_counts(df)
-        df = l1_neighbor_counts(df)
+        df = neighbor_counts_mt(df)
+        print(set(df["neighbors"]))
+        df = l1_neighbor_counts_mt(df)
         df = graph_weights(df)
         with open("data/processed/mutag.pkl", "wb") as file:
             pickle.dump(df, file)
@@ -38,7 +40,11 @@ def load_reddit() -> pd.DataFrame:
             graph_indic_path="REDDIT-BINARY_graph_indicator.txt",
             graph_label_path="REDDIT-BINARY_graph_labels.txt",
         )
+        start = datetime.now()
+        neighbor_counts_mt(df)
+        print(datetime.now() - start)
         df = neighbor_counts(df)
+        print(set(df["neighbors"]))
         df = l1_neighbor_counts(df)
         df = graph_weights(df)
         with open("data/processed/reddit.pkl", "wb") as file:
@@ -48,16 +54,16 @@ def load_reddit() -> pd.DataFrame:
 def main():
     train_split = 0.8
     makedirs("out", exist_ok=True)
-    df = load_mutag()
+    df = load_reddit()
     print(df)
     print(df["graph"].max())
     split_point = int(df["graph"].max() * train_split)
     train = df.loc[df["graph"] <= split_point].reset_index(drop=True)
     test = df.loc[df["graph"] > split_point].reset_index(drop=True)
     # model = create_mlp_binary(7, 8, 1.5, 0.0)
-    model = create_mlp_embedding(7, 7, 8, 1.5, 0.0)
+    model = create_mlp_embedding(5, 5, 8, 1.5, 0.0)
     print(model.summary())
-    model = fit(model, train, 1000)
+    model = fit(model, train, 400)
     g_eval = graph_eval_linear(model, test)
     res0 = g_eval.loc[g_eval["true"] == 0,"pred"]
     res1 = g_eval.loc[g_eval["true"] == 1,"pred"]
