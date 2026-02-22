@@ -57,7 +57,6 @@ def _count_l1(df: pd.DataFrame, c: int, node: int):
 def l1_neighbor_counts_mt(df: pd.DataFrame) -> pd.DataFrame:
     for c in range(df["neighbors"].min(), df["neighbors"].max()+1):
         print(c)
-        df[f"l1c{c}"] = 0
         nodes = list(set(df.loc[df["neighbors"] == c,"a"]))
         with mp.Pool(10) as pool:
             counts = pool.map(partial(_count_l1, df, c), nodes)
