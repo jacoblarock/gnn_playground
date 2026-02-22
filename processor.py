@@ -73,3 +73,12 @@ def l1_neighbor_counts_mt(df: pd.DataFrame) -> pd.DataFrame:
         df = df.join(counts, on="a", how="left")
     print()
     return df
+
+def graph_metadata(df: pd.DataFrame) -> pd.DataFrame:
+    x_cols = list(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
+    for graph in set(df["graph"]):
+        print("graph meta:", graph)
+        i_graph = df.loc[df["graph"] == graph].index
+        for col in x_cols:
+            df.loc[i_graph,f"{col}_meta"] = df.loc[i_graph,col].mean() # type: ignore
+    return df

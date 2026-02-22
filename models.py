@@ -107,7 +107,7 @@ def _save_eval_plot(eval_df: pd.DataFrame):
     plt.savefig("out/pred1.png")
     plt.close()
 
-def graph_eval_linear(
+def graph_eval(
     model: models.Sequential,
     df : pd.DataFrame,
 ) -> pd.DataFrame:
