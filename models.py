@@ -3,6 +3,7 @@ from keras import models, layers, losses
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt 
+from functools import partial
 
 class CondSquareDistLoss(tf.keras.losses.Loss):
     def __init__(self, epsilon=1e-7, name="custom_sum_loss"):
@@ -57,14 +58,14 @@ def create_mlp_embedding(
     return model
 
 def _save_loss_plot(history):
-    loss = np.array(history.history['loss'])
+    loss = np.array(history.history["loss"])
     epochs = range(1, len(loss) + 1)
     plt.figure(figsize=(10, 6))
-    plt.plot(epochs, loss, 'bo-', label='Training loss')
+    plt.plot(epochs, loss, "bo-", label="Training loss")
     plt.ylim(loss.min(), np.quantile(loss, 0.95))
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
+    plt.title("Training")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
     plt.legend()
     plt.grid(False)
     plt.savefig("out/train_loss.png")
@@ -76,9 +77,9 @@ def fit(
     epochs: int,
 ) -> models.Sequential:
     x_cols = list(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
-    x = df[x_cols].to_numpy()
+    x = df[x_cols].to_numpy(dtype=np.float32)
     y = df["graph_label"].to_numpy()
-    w = df["graph_weight"].to_numpy()
+    w = df["graph_weight"].to_numpy(dtype=np.float32)
     history = model.fit(x, y, sample_weight=w, epochs=epochs)
     _save_loss_plot(history)
     return model
@@ -88,20 +89,20 @@ def predict(
     df: pd.DataFrame,
 ) -> np.ndarray:
     x_cols = list(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight", "prediction"})
-    x = df[x_cols].to_numpy()
+    x = df[x_cols].to_numpy(dtype=np.float32)
     return model.predict(x)
 
 def _save_eval_plot(eval_df: pd.DataFrame):
     res0 = eval_df.loc[eval_df["true"] == 0,"pred"]
     res1 = eval_df.loc[eval_df["true"] == 1,"pred"]
     plt.figure(figsize=(10, 6))
-    plt.hist(res0.to_numpy(), bins=10)
+    plt.hist(res0.to_numpy(dtype=np.float32), bins=20)
     plt.title("Label 0 Distances")
     plt.xlabel("Pred Distance")
     plt.savefig("out/pred0.png")
     plt.close()
     plt.figure(figsize=(10, 6))
-    plt.hist(res1.to_numpy(), bins=10)
+    plt.hist(res1.to_numpy(dtype=np.float32), bins=20)
     plt.title("Label 1 Distances")
     plt.xlabel("Pred Distance")
     plt.savefig("out/pred1.png")
@@ -122,3 +123,37 @@ def graph_eval(
         }
     _save_eval_plot(out)
     return out
+
+def accuracy(res: pd.DataFrame, threshold: float) -> float:
+    pred_over = res.loc[res["pred"] >= threshold]
+    tp = pred_over.loc[pred_over["true"] == 1,"true"].count()
+    pred_under = res.loc[res["pred"] < threshold]
+    tn = pred_under.loc[pred_under["true"] == 0,"true"].count()
+    return (tp + tn) / res["true"].count()
+
+def best_threshold(
+    model: models.Sequential,
+    df : pd.DataFrame,
+) -> float:
+    res = graph_eval(model, df)
+    candidates = np.array(res["pred"])
+    accuracies = np.array(map(partial(accuracy, res), candidates))
+    return candidates[np.argmax(accuracies)]
+
+
+def eval_stats(res: pd.DataFrame, threshold: float) -> dict:
+    pred_over = res.loc[res["pred"] >= threshold]
+    tp = pred_over.loc[pred_over["true"] == 1,"true"].count()
+    fp = pred_over.loc[pred_over["true"] == 0,"true"].count()
+    pred_under = res.loc[res["pred"] < threshold]
+    tn = pred_under.loc[pred_under["true"] == 0,"true"].count()
+    fn = pred_under.loc[pred_under["true"] == 1,"true"].count()
+    return {
+        "tp": tp,
+        "fp": fp,
+        "tn": tn,
+        "fn": fn,
+        "accuracy": (tp + tn) / (tp + fp + tn + fn),
+        "precision": tp / (tp + fp),
+        "recall": tp / (tp + fn),
+    }
