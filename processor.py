@@ -64,6 +64,5 @@ def l1_neighbor_counts_mt(df: pd.DataFrame) -> pd.DataFrame:
             f"l1c{c}": counts
         }, index=nodes)
         df = df.join(temp, on="a", how="left")
-        df = df.drop("counts", axis=1)
         print()
     return df
