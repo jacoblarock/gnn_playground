@@ -1,5 +1,5 @@
 import tensorflow as tf
-from keras import models, layers, losses
+from keras import models, layers, losses, metrics
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt 
@@ -57,6 +57,35 @@ def create_mlp_embedding(
     )
     return model
 
+def create_mlp_terminus(
+    node_embedding_model: models.Sequential,
+    n_hl: int,
+    hl_scale: float,
+    hl_decay: float
+) -> models.Sequential:
+    in_size = node_embedding_model.output_shape[-1]
+    model = models.Sequential([
+        layers.Input((in_size,))
+    ] + [
+        layers.Dense(int(in_size * hl_scale * (1 - hl_decay * i)), activation="relu") for i in range(n_hl)
+    ] + [
+        layers.Dense(1, activation="sigmoid")
+    ])
+    model.compile(
+        optimizer="adam",
+        loss=losses.BinaryCrossentropy,
+        metrics=[
+            metrics.Accuracy,
+            metrics.Precision,
+            metrics.Recall,
+            metrics.TruePositives,
+            metrics.TrueNegatives,
+            metrics.FalsePositives,
+            metrics.FalseNegatives,
+        ]
+    )
+    return model
+
 def _save_loss_plot(history):
     loss = np.array(history.history["loss"])
     epochs = range(1, len(loss) + 1)
@@ -80,8 +109,34 @@ def fit(
     x = df[x_cols].to_numpy(dtype=np.float32)
     y = df["graph_label"].to_numpy()
     w = df["graph_weight"].to_numpy(dtype=np.float32)
-    history = model.fit(x, y, sample_weight=w, epochs=epochs)
+    history = model.fit(
+        x,
+        y,
+        sample_weight=w,
+        epochs=epochs,
+        verbose=2, # type: ignore
+    )
     _save_loss_plot(history)
+    return model
+
+def fit_terminus(
+    model: models.Sequential,
+    df: pd.DataFrame,
+    preds: np.ndarray,
+    epochs: int,
+) -> models.Sequential:
+    groups = pd.DataFrame(preds)
+    groups[["graph","graph_label"]] = df[["graph","graph_label"]]
+    groups = groups.groupby(by="graph").mean()
+    y = groups["graph_label"].to_numpy()
+    groups = groups.drop("graph_label", axis=1)
+    x = groups.to_numpy()
+    model.fit(
+        x,
+        y,
+        epochs=epochs,
+        verbose=2, # type: ignore
+    )
     return model
 
 def predict(
@@ -140,7 +195,6 @@ def best_threshold(
     accuracies = np.array(map(partial(accuracy, res), candidates))
     return candidates[np.argmax(accuracies)]
 
-
 def eval_stats(res: pd.DataFrame, threshold: float) -> dict:
     pred_over = res.loc[res["pred"] >= threshold]
     tp = pred_over.loc[pred_over["true"] == 1,"true"].count()
@@ -157,3 +211,18 @@ def eval_stats(res: pd.DataFrame, threshold: float) -> dict:
         "precision": tp / (tp + fp),
         "recall": tp / (tp + fn),
     }
+
+def eval_term(
+    model: models.Sequential,
+    df: pd.DataFrame,
+    preds: np.ndarray,
+):
+    groups = pd.DataFrame(preds)
+    groups[["graph","graph_label"]] = df[["graph","graph_label"]]
+    print(groups.shape)
+    groups = groups.groupby(by="graph").mean()
+    print(groups.shape)
+    y = groups["graph_label"].to_numpy()
+    groups = groups.drop("graph_label", axis=1)
+    x = groups.to_numpy()
+    return model.evaluate(x, y)

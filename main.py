@@ -55,9 +55,9 @@ def load_reddit() -> pd.DataFrame:
             pickle.dump(df, file)
     return df
 
-def main():
+def exp_embedding_dist():
     # loading and training
-    train_split = 0.8
+    train_split = 0.6
     makedirs("out", exist_ok=True)
     df = load_mutag()
     print(df)
@@ -68,7 +68,7 @@ def main():
     in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
     model = create_mlp_embedding(in_size, 14, 8, 1.5, 0.0)
     print(model.summary())
-    model = fit(model, train, 400)
+    model = fit(model, train, 200)
     threshold = best_threshold(model, train)
     print("threshold:", threshold)
     # testing
@@ -77,5 +77,41 @@ def main():
     for key, val in stats.items():
         print(key, val)
 
+def exp_terminus():
+    # loading and training
+    train_split = 0.6
+    makedirs("out", exist_ok=True)
+    df = load_reddit()
+    print(df)
+    print(df["graph"].max())
+    split_point = int(df["graph"].max() * train_split)
+    train = df.loc[df["graph"] <= split_point].reset_index(drop=True)
+    test = df.loc[df["graph"] > split_point].reset_index(drop=True)
+    in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
+    model = create_mlp_embedding(in_size, 10, 8, 1.5, 0.0)
+    print(model.summary())
+    model = fit(model, train, 10)
+    # train terminus
+    term = create_mlp_terminus(model, 2, 1.2, 0.0)
+    print(term.summary())
+    term_x = predict(model, train)
+    term = fit_terminus(term, train, term_x, 200)
+    t_eval = eval_term(term, test, term_x)
+    eval_df = pd.DataFrame({
+        "metric": [
+            "Loss",
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "TruePositives",
+            "TrueNegatives",
+            "FalsePositives",
+            "FalseNegatives",
+        ],
+        "value": t_eval,
+    })
+    eval_df = eval_df.loc[eval_df["metric"] != "loss"].reset_index(drop=True)
+    print(eval_df)
+
 if __name__ == "__main__":
-    main()
+    exp_terminus()
