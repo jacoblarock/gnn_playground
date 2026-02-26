@@ -6,9 +6,12 @@ import matplotlib.pyplot as plt
 from functools import partial
 
 class CondSquareDistLoss(tf.keras.losses.Loss):
+    """
+    Conditional loss based on the true label and the square euclidian distance
+    """
     def __init__(self, epsilon=1e-7, name="custom_sum_loss"):
         super().__init__(name=name)
-        # epsilon adjustment to gradient explosion
+        # epsilon adjustment to prevent gradient explosion
         self.epsilon = epsilon
 
     def call(self, y_true, y_pred):

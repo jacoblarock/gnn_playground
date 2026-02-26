@@ -29,11 +29,12 @@ def load_mutag() -> pd.DataFrame:
             pickle.dump(df, file)
     return df
 
-def load_reddit() -> pd.DataFrame:
-    cutoff = 50
+def load_reddit(test=False) -> pd.DataFrame:
+    cutoff = 20
+    cache_path = f"data/processed/reddit{cutoff}.pkl" if not test else f"data/processed/reddit{cutoff}_test.pkl"
     makedirs("data/processed", exist_ok=True)
-    if isfile(f"data/processed/reddit{cutoff}.pkl"):
-        with open(f"data/processed/reddit{cutoff}.pkl", "rb") as file:
+    if isfile(cache_path):
+        with open(cache_path, "rb") as file:
             df = pickle.load(file)
     else:
         df = load_graphs(
@@ -42,7 +43,13 @@ def load_reddit() -> pd.DataFrame:
             graph_indic_path="REDDIT-BINARY_graph_indicator.txt",
             graph_label_path="REDDIT-BINARY_graph_labels.txt",
         )
-        graphs = list(set(df["graph"]))[0:cutoff]
+        if not test:
+            graphs_false = list(set(df.loc[df["graph_label"]==0,"graph"]))[:cutoff]
+            graphs_true = list(set(df.loc[df["graph_label"]==1,"graph"]))[:cutoff]
+        else:
+            graphs_false = list(set(df.loc[df["graph_label"]==0,"graph"]))[-cutoff:]
+            graphs_true = list(set(df.loc[df["graph_label"]==1,"graph"]))[-cutoff:]
+        graphs = graphs_false + graphs_true
         print(df.shape)
         df = df.loc[df["graph"].isin(graphs)]
         print(df.shape)
@@ -51,7 +58,7 @@ def load_reddit() -> pd.DataFrame:
         df = l1_neighbor_counts_mt(df).fillna(0).astype(int)
         df = graph_metadata(df)
         df = graph_weights(df)
-        with open(f"data/processed/reddit{cutoff}.pkl", "wb") as file:
+        with open(cache_path, "wb") as file:
             pickle.dump(df, file)
     return df
 
@@ -77,11 +84,11 @@ def exp_embedding_dist():
     for key, val in stats.items():
         print(key, val)
 
-def exp_terminus():
+def exp_terminus_mutag():
     # loading and training
     train_split = 0.6
     makedirs("out", exist_ok=True)
-    df = load_reddit()
+    df = load_mutag()
     print(df)
     print(df["graph"].max())
     split_point = int(df["graph"].max() * train_split)
@@ -90,7 +97,7 @@ def exp_terminus():
     in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
     model = create_mlp_embedding(in_size, 10, 8, 1.5, 0.0)
     print(model.summary())
-    model = fit(model, train, 10)
+    model = fit(model, train, 200)
     # train terminus
     term = create_mlp_terminus(model, 2, 1.2, 0.0)
     print(term.summary())
@@ -113,5 +120,41 @@ def exp_terminus():
     eval_df = eval_df.loc[eval_df["metric"] != "loss"].reset_index(drop=True)
     print(eval_df)
 
+def exp_terminus_reddit():
+    # loading and training
+    makedirs("out", exist_ok=True)
+    train = load_reddit()
+    print(train)
+    print(train["graph"].max())
+    in_size = len(set(train.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
+    model = create_mlp_embedding(in_size, 10, 8, 0.8, 0.1)
+    print(model.summary())
+    model = fit(model, train, 1)
+    # train terminus
+    term = create_mlp_terminus(model, 2, 1.2, 0.0)
+    print(term.summary())
+    term_x = predict(model, train)
+    term = fit_terminus(term, train, term_x, 200)
+    del train
+    del term_x
+    test = load_reddit(test=True)
+    term_x = predict(model, test)
+    t_eval = eval_term(term, test, term_x)
+    eval_df = pd.DataFrame({
+        "metric": [
+            "Loss",
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "TruePositives",
+            "TrueNegatives",
+            "FalsePositives",
+            "FalseNegatives",
+        ],
+        "value": t_eval,
+    })
+    eval_df = eval_df.loc[eval_df["metric"] != "loss"].reset_index(drop=True)
+    print(eval_df)
+
 if __name__ == "__main__":
-    exp_terminus()
+    exp_terminus_mutag()
