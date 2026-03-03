@@ -50,24 +50,27 @@ def l1_neighbor_counts(df: pd.DataFrame) -> pd.DataFrame:
         print()
     return df
 
-def _count_l1(df: pd.DataFrame, c: int, node: int):
+def _count_l1(df: pd.DataFrame, c: int, node: int) -> int:
     print("process node:", node, end="\r")
     return df.loc[df["b"] == node].loc[df["neighbors"] == c].shape[0]
 
 def l1_neighbor_counts_mt(df: pd.DataFrame) -> pd.DataFrame:
     mapped: list[pd.Series] = []
     for c in range(df["neighbors"].min(), df["neighbors"].max()+1):
-        print(c)
         nodes = list(set(df.loc[df["neighbors"] == c,"a"]))
-        if len(nodes) > 50:
-            with mp.Pool(10) as pool:
-                counts = pool.map(partial(_count_l1, df, c), nodes)
+        if len(nodes) > 0:
+            print(c)
+            if len(nodes) > 50:
+                with mp.Pool(10) as pool:
+                    counts = list(pool.map(partial(_count_l1, df, c), nodes))
+            else:
+                counts = list(map(partial(_count_l1, df, c), nodes))
+            mapped.append(pd.Series(
+                counts, index=nodes, name=f"l1c{c}"
+            ))
+            print()
         else:
-            counts = list(map(partial(_count_l1, df, c), nodes))
-        mapped.append(pd.Series(
-            counts, index=nodes, name=f"l1c{c}"
-        ))
-        print()
+            print("skip", c)
     for counts in mapped:
         print("join:", counts.name, end="\r")
         df = df.join(counts, on="a", how="left")
