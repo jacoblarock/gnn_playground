@@ -173,7 +173,7 @@ def graph_eval(
     out = pd.DataFrame(columns=["pred","true"])
     node_preds = predict(model, df)
     if len(node_preds.shape) > 0:
-            node_preds = np.linalg.norm(node_preds, axis=1)
+        node_preds = np.linalg.norm(node_preds, axis=1)
     for g in set(df["graph"]):
         out.loc[g] = {
             "pred": node_preds[list(df.loc[df["graph"] == g].index)].mean(),

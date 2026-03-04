@@ -42,9 +42,8 @@ def load_reddit() -> pd.DataFrame:
         graphs_true = list(set(df.loc[df["graph_label"]==1,"graph"]))[:cutoff]
         graphs = graphs_false + graphs_true
         print(graphs)
-        print(df.shape)
         df = df.loc[df["graph"].isin(graphs)]
-        print(df.shape)
+        # df = convert_to_undirected(df)
         df = neighbor_counts_mt(df)
         print(set(df["neighbors"]))
         df = l1_neighbor_counts_mt(df).fillna(0).astype(int)
@@ -60,7 +59,6 @@ def exp_embedding_hypersphere():
     makedirs("out", exist_ok=True)
     df = load_reddit()
     print(df)
-    print(df["graph"].max())
     graphs_false = list(set(df.loc[df["graph_label"]==0,"graph"]))
     false_cutoff = int(len(graphs_false) * train_split)
     graphs_true = list(set(df.loc[df["graph_label"]==1,"graph"]))
@@ -74,13 +72,14 @@ def exp_embedding_hypersphere():
         df.loc[df["graph"].isin(graphs_true[true_cutoff:])].reset_index(drop=True),
     )).reset_index(drop=True)
     in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
-    model = create_mlp_embedding(in_size, 14, 8, 1.5, 0.1)
+    model = create_mlp_embedding(in_size, 14, 8, 0.6, 0.1)
     print(model.summary())
-    model = fit(model, train, 10)
+    model = fit(model, train, 5)
     threshold = best_threshold(model, train)
     print("threshold:", threshold)
     # testing
     g_eval = graph_eval(model, test)
+    g_eval.to_csv("out/eval.csv")
     stats = eval_stats(g_eval, threshold)
     for key, val in stats.items():
         print(key, val)

@@ -18,6 +18,12 @@ def neighbor_counts(df: pd.DataFrame) -> pd.DataFrame:
     print()
     return df
 
+def convert_to_undirected(df: pd.DataFrame) -> pd.DataFrame: 
+    flipped = df.copy()
+    flipped = flipped.rename({"a": "b", "b": "a"}, axis=1)
+    df = pd.concat((df, flipped)).drop_duplicates().reset_index(drop=True)
+    return df
+
 def _gen_batches(data: pd.Series, batch_size: int) -> list[np.ndarray]:
     out = []
     temp = np.array(list(set(data)))
@@ -44,7 +50,7 @@ def l1_neighbor_counts(df: pd.DataFrame) -> pd.DataFrame:
     for c in range(df["neighbors"].min(), df["neighbors"].max()+1):
         print(c)
         df[f"l1c{c}"] = 0
-        for node in set(df.loc[df["neighbors"] == c,"a"]):
+        for node in set(df.loc[df["neighbors"] == c,"b"]):
             print("node:", node, end="\r")
             df.loc[df["a"] == node,f"l1c{c}"] = df.loc[df["b"] == node].loc[df["neighbors"] == c].shape[0]
         print()
@@ -57,7 +63,7 @@ def _count_l1(df: pd.DataFrame, c: int, node: int) -> int:
 def l1_neighbor_counts_mt(df: pd.DataFrame) -> pd.DataFrame:
     mapped: list[pd.Series] = []
     for c in range(df["neighbors"].min(), df["neighbors"].max()+1):
-        nodes = list(set(df.loc[df["neighbors"] == c,"a"]))
+        nodes = list(set(df.loc[df["neighbors"] == c,"b"]))
         if len(nodes) > 0:
             print(c)
             if len(nodes) > 50:
