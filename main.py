@@ -182,6 +182,8 @@ def experiment():
         n_batches=2
     )
     print(json.dumps(res, indent=2))
+    with open("out/finetuning.json", "w") as file:
+        json.dump(res, file, indent=2)
 
 if __name__ == "__main__":
     experiment()
