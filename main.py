@@ -53,8 +53,77 @@ def load_reddit() -> pd.DataFrame:
     df = pd.read_csv(cache_path)
     return df
 
-def exp_embedding_hypersphere():
-    # loading and training
+def exp_embedding_hypersphere(
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    e_in_size: int,
+    e_out_size: int,
+    e_n_hl: int,
+    e_hl_scale: float,
+    e_hl_decay: float,
+    e_epochs: int,
+) -> dict:
+    model = create_mlp_embedding(
+        e_in_size,
+        e_out_size,
+        e_n_hl,
+        e_hl_scale,
+        e_hl_decay
+    )
+    print(model.summary())
+    model = fit(model, train, e_epochs)
+    threshold = best_threshold(model, train)
+    print("threshold:", threshold)
+    # testing
+    g_eval = graph_eval(model, test)
+    # g_eval.to_csv("out/eval.csv", index=False)
+    return eval_stats(g_eval, threshold)
+
+def batch_eval_hs(
+    *args,
+    exp = exp_embedding_hypersphere,
+    n_batches=1
+) -> dict:
+    results = []
+    for i in range(n_batches):
+        results.append(exp(*args))
+    df = pd.DataFrame(results)
+    out = {}
+    for col in df.columns:
+        out[col] = {
+            "mean": df[col].mean(),
+            "std": df[col].std(),
+        }
+    return out
+
+
+def exp_terminus(
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    e_in_size: int,
+    e_out_size: int,
+    e_n_hl: int,
+    e_hl_scale: float,
+    e_hl_decay: float,
+    e_epochs: int,
+) -> dict:
+    model = create_mlp_embedding(
+        e_in_size,
+        e_out_size,
+        e_n_hl,
+        e_hl_scale,
+        e_hl_decay
+    )
+    print(model.summary())
+    model = fit(model, train, e_epochs)
+    # train terminus
+    term = create_mlp_terminus(model, 2, 1.2, 0.0)
+    print(term.summary())
+    term_x = predict(model, train)
+    term = fit_terminus(term, train, term_x, 200)
+    return eval_term(term, test, term_x)
+
+def experiment():
     train_split = 0.6
     makedirs("out", exist_ok=True)
     df = load_mutag()
@@ -72,48 +141,17 @@ def exp_embedding_hypersphere():
         df.loc[df["graph"].isin(graphs_true[true_cutoff:])].reset_index(drop=True),
     )).reset_index(drop=True)
     in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
-    model = create_mlp_embedding(in_size, 14, 8, 1.2, 0.0)
-    print(model.summary())
-    model = fit(model, train, 200)
-    threshold = best_threshold(model, train)
-    print("threshold:", threshold)
-    # testing
-    g_eval = graph_eval(model, test)
-    g_eval.to_csv("out/eval.csv", index=False)
-    stats = eval_stats(g_eval, threshold)
-    for key, val in stats.items():
-        print(key, val)
-
-def exp_terminus():
-    # loading and training
-    train_split = 0.6
-    makedirs("out", exist_ok=True)
-    df = load_reddit()
-    print(df)
-    graphs_false = list(set(df.loc[df["graph_label"]==0,"graph"]))
-    false_cutoff = int(len(graphs_false) * train_split)
-    graphs_true = list(set(df.loc[df["graph_label"]==1,"graph"]))
-    true_cutoff = int(len(graphs_true) * train_split)
-    train = pd.concat((
-        df.loc[df["graph"].isin(graphs_false[:false_cutoff])].reset_index(drop=True),
-        df.loc[df["graph"].isin(graphs_true[:true_cutoff])].reset_index(drop=True),
-    )).reset_index(drop=True)
-    test = pd.concat((
-        df.loc[df["graph"].isin(graphs_false[false_cutoff:])].reset_index(drop=True),
-        df.loc[df["graph"].isin(graphs_true[true_cutoff:])].reset_index(drop=True),
-    )).reset_index(drop=True)
-    in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
-    model = create_mlp_embedding(in_size, 14, 8, 1.2, 0.0)
-    print(model.summary())
-    model = fit(model, train, 10)
-    # train terminus
-    term = create_mlp_terminus(model, 2, 1.2, 0.0)
-    print(term.summary())
-    term_x = predict(model, train)
-    term = fit_terminus(term, train, term_x, 200)
-    stats = eval_term(term, test, term_x)
-    for key, val in stats.items():
-        print(key, val)
+    res = batch_eval_hs(
+        train,
+        test,
+        in_size,
+        14,
+        8,
+        1.2,
+        0.0,
+        200,
+        n_batches=2
+    )
 
 if __name__ == "__main__":
-    exp_embedding_hypersphere()
+    experiment()
