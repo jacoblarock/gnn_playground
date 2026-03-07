@@ -1,10 +1,10 @@
 from os.path import isfile
 from os import makedirs
-import pickle
+import json
 from loader import load_graphs
 from processor import *
 from models import *
-from datetime import datetime
+from typing import Callable
 
 def load_mutag() -> pd.DataFrame:
     makedirs("data/processed", exist_ok=True)
@@ -79,24 +79,6 @@ def exp_embedding_hypersphere(
     # g_eval.to_csv("out/eval.csv", index=False)
     return eval_stats(g_eval, threshold)
 
-def batch_eval_hs(
-    *args,
-    exp = exp_embedding_hypersphere,
-    n_batches=1
-) -> dict:
-    results = []
-    for i in range(n_batches):
-        results.append(exp(*args))
-    df = pd.DataFrame(results)
-    out = {}
-    for col in df.columns:
-        out[col] = {
-            "mean": df[col].mean(),
-            "std": df[col].std(),
-        }
-    return out
-
-
 def exp_terminus(
     train: pd.DataFrame,
     test: pd.DataFrame,
@@ -123,6 +105,53 @@ def exp_terminus(
     term = fit_terminus(term, train, term_x, 200)
     return eval_term(term, test, term_x)
 
+def batch_eval(
+    *args,
+    exp: Callable = exp_embedding_hypersphere,
+    n_batches=1
+) -> dict:
+    results = []
+    for i in range(n_batches):
+        results.append(exp(*args))
+    df = pd.DataFrame(results)
+    out = {}
+    for col in df.columns:
+        out[col] = {
+            "mean": df[col].mean(),
+            "std": df[col].std(),
+        }
+    return out
+
+def fine_tune(
+    *args,
+    exp: Callable = exp_embedding_hypersphere,
+    n_batches: int = 1
+) -> list[dict]:
+    i_tunable = -1
+    for i, arg in enumerate(args):
+        if type(arg) == list:
+            i_tunable = i
+            break
+    if i_tunable == -1:
+        return [
+            batch_eval(
+                *args,
+                exp=exp,
+                n_batches=n_batches
+            )
+        ]
+    out = []
+    for i in range(len(args[i_tunable])):
+        exp_args = [
+            arg if j != i_tunable else arg[i] for j, arg in enumerate(args)
+        ]
+        out.append(batch_eval(
+            *exp_args,
+            exp=exp,
+            n_batches=n_batches
+        ))
+    return out
+
 def experiment():
     train_split = 0.6
     makedirs("out", exist_ok=True)
@@ -141,17 +170,18 @@ def experiment():
         df.loc[df["graph"].isin(graphs_true[true_cutoff:])].reset_index(drop=True),
     )).reset_index(drop=True)
     in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
-    res = batch_eval_hs(
+    res = fine_tune(
         train,
         test,
         in_size,
-        14,
-        8,
+        11,
+        [3,4,5,6,7,8,9,10],
         1.2,
         0.0,
         200,
         n_batches=2
     )
+    print(json.dumps(res, indent=2))
 
 if __name__ == "__main__":
     experiment()
