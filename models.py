@@ -9,17 +9,45 @@ class CondSquareDistLoss(tf.keras.losses.Loss):
     """
     Conditional loss based on the true label and the square euclidian distance
     """
-    def __init__(self, epsilon=1e-7, name="custom_sum_loss"):
+    def __init__(self, epsilon=1e-7, name="cond_square_dist_loss"):
         super().__init__(name=name)
         # epsilon adjustment to prevent gradient explosion
         self.epsilon = epsilon
-
     def call(self, y_true, y_pred):
         square_dist = tf.reduce_sum(tf.abs(y_pred), axis=-1)
         loss_if_zero = square_dist
         loss_if_one = 1.0 / (square_dist + self.epsilon)
         loss = tf.where(tf.cast(y_true, tf.bool), loss_if_one, loss_if_zero)
         return tf.reduce_mean(loss)
+
+class CondDistLoss(tf.keras.losses.Loss):
+    """
+    Conditional loss based on the true label and the square euclidian distance
+    """
+    def __init__(self, epsilon=1e-7, name="cond_dist_loss"):
+        super().__init__(name=name)
+        # epsilon adjustment to prevent gradient explosion
+        self.epsilon = epsilon
+    def call(self, y_true, y_pred):
+        dist = tf.math.sqrt(tf.reduce_sum(tf.abs(y_pred), axis=-1))
+        loss_if_zero = dist
+        loss_if_one = 1.0 / (dist + self.epsilon)
+        loss = tf.where(tf.cast(y_true, tf.bool), loss_if_one, loss_if_zero)
+        return tf.reduce_mean(loss)
+
+class CondSigmoidDerivativeLoss(tf.keras.losses.Loss):
+    """
+    Conditional loss based on the true label and the derivative of the sigmoid of the square euclidian distance
+    """
+    def __init__(self, epsilon=1e-7, name="cond_sigmoid_derivative_loss"):
+        super().__init__(name=name)
+    def call(self, y_true, y_pred):
+        square_dist = tf.reduce_sum(tf.abs(y_pred), axis=-1)
+        loss_if_one = tf.math.multiply(4.0, tf.math.divide(tf.math.exp(-square_dist), tf.math.pow(tf.math.add(1.0, tf.math.exp(-square_dist)), 2)))
+        loss_if_zero = 1 - loss_if_one
+        loss = tf.where(tf.cast(y_true, tf.bool), loss_if_one, loss_if_zero)
+        return tf.reduce_mean(loss)
+
 
 def create_mlp_binary(
     in_size: int,
@@ -56,7 +84,7 @@ def create_mlp_embedding(
     ])
     model.compile(
         optimizer="adam",
-        loss=CondSquareDistLoss,
+        loss=CondDistLoss,
     )
     return model
 
@@ -228,4 +256,15 @@ def eval_term(
     y = groups["graph_label"].to_numpy()
     groups = groups.drop("graph_label", axis=1)
     x = groups.to_numpy()
-    return model.evaluate(x, y)
+    vals = model.evaluate(x, y)
+    keys = [
+        "loss",
+        "accuracy",
+        "precision",
+        "recall",
+        "tp",
+        "tn",
+        "fp",
+        "fn",
+    ]
+    return dict(zip(keys, vals))

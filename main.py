@@ -57,7 +57,7 @@ def exp_embedding_hypersphere():
     # loading and training
     train_split = 0.6
     makedirs("out", exist_ok=True)
-    df = load_reddit()
+    df = load_mutag()
     print(df)
     graphs_false = list(set(df.loc[df["graph_label"]==0,"graph"]))
     false_cutoff = int(len(graphs_false) * train_split)
@@ -72,14 +72,14 @@ def exp_embedding_hypersphere():
         df.loc[df["graph"].isin(graphs_true[true_cutoff:])].reset_index(drop=True),
     )).reset_index(drop=True)
     in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
-    model = create_mlp_embedding(in_size, 14, 8, 0.6, 0.1)
+    model = create_mlp_embedding(in_size, 14, 8, 1.2, 0.0)
     print(model.summary())
-    model = fit(model, train, 5)
+    model = fit(model, train, 200)
     threshold = best_threshold(model, train)
     print("threshold:", threshold)
     # testing
     g_eval = graph_eval(model, test)
-    g_eval.to_csv("out/eval.csv")
+    g_eval.to_csv("out/eval.csv", index=False)
     stats = eval_stats(g_eval, threshold)
     for key, val in stats.items():
         print(key, val)
@@ -103,7 +103,7 @@ def exp_terminus():
         df.loc[df["graph"].isin(graphs_true[true_cutoff:])].reset_index(drop=True),
     )).reset_index(drop=True)
     in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
-    model = create_mlp_embedding(in_size, 14, 8, 1.5, 0.1)
+    model = create_mlp_embedding(in_size, 14, 8, 1.2, 0.0)
     print(model.summary())
     model = fit(model, train, 10)
     # train terminus
@@ -111,22 +111,9 @@ def exp_terminus():
     print(term.summary())
     term_x = predict(model, train)
     term = fit_terminus(term, train, term_x, 200)
-    t_eval = eval_term(term, test, term_x)
-    eval_df = pd.DataFrame({
-        "metric": [
-            "Loss",
-            "Accuracy",
-            "Precision",
-            "Recall",
-            "TruePositives",
-            "TrueNegatives",
-            "FalsePositives",
-            "FalseNegatives",
-        ],
-        "value": t_eval,
-    })
-    eval_df = eval_df.loc[eval_df["metric"] != "loss"].reset_index(drop=True)
-    print(eval_df)
+    stats = eval_term(term, test, term_x)
+    for key, val in stats.items():
+        print(key, val)
 
 if __name__ == "__main__":
     exp_embedding_hypersphere()
