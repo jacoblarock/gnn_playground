@@ -28,7 +28,7 @@ def load_mutag() -> pd.DataFrame:
     return df
 
 def load_reddit() -> pd.DataFrame:
-    cutoff = 100
+    cutoff = 200
     cache_path = f"data/processed/reddit{cutoff}.csv"
     makedirs("data/processed", exist_ok=True)
     if not isfile(cache_path):
@@ -170,16 +170,16 @@ def experiment():
         df.loc[df["graph"].isin(graphs_true[true_cutoff:])].reset_index(drop=True),
     )).reset_index(drop=True)
     in_size = len(set(df.columns) - {"a", "b", "graph", "graph_label", "graph_weight"})
-    res = fine_tune(
+    res = batch_eval(
         train,
         test,
         in_size,
-        11,
-        [3,4,5,6,7,8,9,10],
-        1.2,
-        0.0,
-        200,
-        n_batches=2
+        int(in_size * 0.8),
+        9,
+        1.3,
+        0.0125,
+        10,
+        n_batches=10
     )
     print(json.dumps(res, indent=2))
     with open("out/finetuning.json", "w") as file:
