@@ -35,6 +35,17 @@ class CondDistLoss(tf.keras.losses.Loss):
         loss = tf.where(tf.cast(y_true, tf.bool), loss_if_one, loss_if_zero)
         return tf.reduce_mean(loss)
 
+class SquareDistCrossEntropy(tf.keras.losses.Loss):
+    """
+    Loss based on the binary crossentropy of the label and the sigmoid of the square distance to the origin
+    """
+    def __init__(self, name="square_dist_crossentropy"):
+        super().__init__(name=name)
+    def call(self, y_true, y_pred):
+        square_dist = tf.reduce_sum(tf.abs(y_pred), axis=-1)
+        s = tf.math.sigmoid(square_dist)
+        return tf.keras.losses.binary_crossentropy(y_true, s)
+
 class CondSigmoidDerivativeLoss(tf.keras.losses.Loss):
     """
     Conditional loss based on the true label and the derivative of the sigmoid of the square euclidian distance
@@ -47,7 +58,6 @@ class CondSigmoidDerivativeLoss(tf.keras.losses.Loss):
         loss_if_zero = 1 - loss_if_one
         loss = tf.where(tf.cast(y_true, tf.bool), loss_if_one, loss_if_zero)
         return tf.reduce_mean(loss)
-
 
 def create_mlp_binary(
     in_size: int,
@@ -84,7 +94,7 @@ def create_mlp_embedding(
     ])
     model.compile(
         optimizer="adam",
-        loss=CondDistLoss,
+        loss=SquareDistCrossEntropy,
     )
     return model
 
